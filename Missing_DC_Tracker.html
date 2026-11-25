@@ -138,7 +138,7 @@ async function zoomScan(src,w,h,tag,P2,ok,cf){
   let i=0;while(i<P.length){const B=i==0?1:bsz(),hi=Math.min(P.length,i+B);$('i2').textContent='Zoom check '+(i+1)+(hi>i+1?'-'+hi:'')+'/'+P.length+': '+tag;
    const ts=await Promise.all(P.slice(i,hi).map(a=>ocr(zoomC(src,w,h,a[0],a[1],a[2],a[3],a[4],a[5],a[6]),a[7])));i=hi;
    for(const t of ts){const k=dcFrom(t);
-   if(k){if(!ok||ok(k)){if(cf)cf.vt=vt;return k}if(!fb)fb=k;ag[k]=(ag[k]||0)+1;if(cf&&ag[k]>=2&&!nearL(k)){cf.v=1;cf.vt=vt;return k}}
+   if(k){if(!ok||ok(k)){if(cf)cf.vt=vt;return k}if(!fb)fb=k;ag[k]=(ag[k]||0)+1;if(cf&&ag[k]>=2){cf.v=nearL(k)?0:1;cf.sv=ag[k];cf.vt=vt;return k}}
    if(ok){const r=recCands(t);for(const x of r.st)if(ok(x))return x;
     // email list ke saath vote: exact 7-digit = 2 vote, ek confusing digit (6/8, 3/9 ...) ka farq = 1 vote (har read mein ek party ka max ek baar)
     const T=normD(t).replace(/S/g,'5').replace(/B/g,'8'),bs={},sn={};
@@ -154,9 +154,9 @@ async function deepScan(f){const out=[],n=f.name.toLowerCase(),exK=new Set(S.exp
    if(!k){const vp=pg.getViewport({scale:1}),sc=2000/vp.width,v=pg.getViewport({scale:sc}),c=document.createElement('canvas');c.width=v.width;c.height=v.height;await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;
     const cf={};k=await zoomScan(c,c.width,c.height,f.name+' p'+i,null,okK,cf);if(cf.v)_conf.add(_fk(f)+'|'+i);
     if(!k){try{k=await rescan(f,okK,i)}catch(e){}}}
-   return k?{k,label:f.name+(N>1?' (p'+i+')':''),pg:i,cfv:cf&&cf.v?1:0,vt:cf?cf.vt:null}:null}catch(e){dead=true;throw e}finally{gate.rel()}};
+   return k?{k,label:f.name+(N>1?' (p'+i+')':''),pg:i,cfv:cf&&cf.v?1:0,sv:cf?cf.sv||0:0,vt:cf?cf.vt:null}:null}catch(e){dead=true;throw e}finally{gate.rel()}};
   const r=await Promise.all(Array.from({length:N},(_,j)=>one(j+1)));r.forEach(x=>x&&out.push(x))}
- else{await gate.acq();try{const bm=await createImageBitmap(f);const cf={};let k=await zoomScan(bm,bm.width,bm.height,f.name,null,okK,cf);if(cf.v)_conf.add(_fk(f)+'|0');if(!k){try{k=await rescan(f,okK)}catch(e){}}try{bm.close()}catch(e){}if(k)out.push({k,label:f.name,cfv:cf&&cf.v?1:0,vt:cf?cf.vt:null})}finally{gate.rel()}}
+ else{await gate.acq();try{const bm=await createImageBitmap(f);const cf={};let k=await zoomScan(bm,bm.width,bm.height,f.name,null,okK,cf);if(cf.v)_conf.add(_fk(f)+'|0');if(!k){try{k=await rescan(f,okK)}catch(e){}}try{bm.close()}catch(e){}if(k)out.push({k,label:f.name,cfv:cf&&cf.v?1:0,sv:cf?cf.sv||0:0,vt:cf?cf.vt:null})}finally{gate.rel()}}
  return out}
 // ---- RECHECK SYSTEM: email list mein na milne par 3 baar dobara check ----
 const esc=x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;');
@@ -250,11 +250,11 @@ const pnm=n=>String(n||'').replace(/\.[a-z0-9]+$/i,'').replace(/\(p\d+\)\s*$/i,'
   res.forEach(r=>deepHits.push(...(r||[])));
   // SPEED: email list mein na milne wali DCs ka dobara scan pehle se parallel chala do (neeche recheck sirf cache se uthata hai)
   {const exs={};S.exp.forEach(d=>exs[d.k]=1);
-   const pf=deepHits.filter(h=>{if(exs[h.k]||!h.f||h.cfv)return false;const multi=/\(p\d+\)\s*$/.test(h.label),kn=multi?null:key(h.label);if(kn&&kn!=h.k&&exs[kn])return false;if(!multi){const hs=[...new Set([...nums(h.label),...nums(h.f.name)])].filter(x=>x!=h.k&&exs[x]);if(hs.length)return false}return true});
+   const pf=deepHits.filter(h=>{if(exs[h.k]||!h.f||h.cfv||h.sv>=2)return false;const multi=/\(p\d+\)\s*$/.test(h.label),kn=multi?null:key(h.label);if(kn&&kn!=h.k&&exs[kn])return false;if(!multi){const hs=[...new Set([...nums(h.label),...nums(h.f.name)])].filter(x=>x!=h.k&&exs[x]);if(hs.length)return false}return true});
    if(pf.length)await Promise.all(pf.map(async h=>{await gate.acq();try{await rescan(h.f,x=>exs[x],h.pg,[])}catch(e){}finally{gate.rel()}}))}}
  const ex2={};S.exp.forEach(d=>ex2[d.k]=d);const xl=[];for(const h0 of deepHits){let h=h0;tot++;
   if(ex[h.k]&&S.led[h.k]&&S.led[h.k].cycle==id){dbl++;tot--;dblL.push([h.k,ex2[h.k]||null]);continue}
-  if(!ex[h.k]){let rc=null;const bg=[],vw=h.vt||{};for(const kk in vw)for(let z=0,zm=Math.min(vw[kk],3);z<zm;z++)bg.push(kk);try{rc=await recheck3(h.f,h.label,h.k,ex,h.pg,t=>$('i2').textContent=t,false,bg,h.cfv)}catch(e){}
+  if(!ex[h.k]){let rc=null;const bg=[],vw=h.vt||{};for(const kk in vw)for(let z=0,zm=Math.min(vw[kk],3);z<zm;z++)bg.push(kk);try{rc=await recheck3(h.f,h.label,h.k,ex,h.pg,t=>$('i2').textContent=t,false,bg,(h.cfv||h.sv>=2)?1:0)}catch(e){}
    if(rc){log.push('🔁 '+esc(h.label)+': pehle <b>'+h.k+'</b> padha tha → recheck '+rc.how+' <b>'+rc.k+'</b> mila'+(ex2[rc.k]?' · Party: <b>'+esc(ex2[rc.k].party)+'</b> ('+esc(ex2[rc.k].dc)+')':''));fx++;h={...h,k:rc.k,chk:rc.how}}}
   if(ex[h.k])mt++;if(S.led[h.k]){dup++;continue}S.led[h.k]={file:h.label,src:h.label,cycle:id,at:now(),...(h.chk?{chk:h.chk}:{})};refPut(h.k,{f:h.f,pg:/\(p\d+\)\s*$/.test(h.label)?h.pg:null});if(!ex[h.k]){unk++;const pt=pnm(h.label);unkL.push([h.k,pt?{party:pt}:null]);xl.push(xe(h.label,h.k));FM[h.k]=h.f}nw++}
  for(const [p,src,sf,zt] of names){const base=p.split(/[\\/]/).pop();if(!/\.(pdf|jpe?g|jfif|png|webp|bmp|gif|tiff?)$/i.test(base))continue;if(/^S-\d/i.test(base))continue;if(deepDone[base])continue;tot++;const k=key(base);if(!k){unk++;nt++;continue}
